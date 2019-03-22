@@ -15,16 +15,15 @@ from utilities import data_util as du
 class ArtificialNeuralNetwork:
 
     # initializing the class
-    def __init__(self):
+    def __init__(self, layers = [2,2,2,1]):
 
         # generating the same synaptic weights every time the program runs
         np.random.seed(1)
+        self.w = []
+        for layer_index in range(1, len(layers)):
+            self.w += [2 * np.random.rand(layers[layer_index - 1] + 1, layers[layer_index]) - 1]
 
-        # synaptic weights (3 × 4 Matrix) of the hidden layer
-        self.w_ij = 2 * np.random.rand(3, 4) - 1
-
-        # synaptic weights (4 × 1 Matrix) of the output layer
-        self.w_jk = 2 * np.random.rand(5, 1) - 1
+        print("--Weights initialized--")
 
     def sigmoid(self, x):
 
@@ -47,86 +46,82 @@ class ArtificialNeuralNetwork:
 
         return - sum(y * np.log10(a) + (1 - y) * np.log10(1 - a))
 
-    def train(self, X, Y, learning_rate=0.5, iterations=1):
+    def forward_iteration(self, x, layers):
+        a = [x]
+        z = []
+
+        for j in range(1, len(layers)):
+            z += [np.dot(a[j - 1], self.w[j - 1])]
+            activation = self.sigmoid(z[-1])
+            if j != len(layers) - 1:
+                a += [du.append_ones(activation)]
+            else:
+                a += [activation]
+
+        return a,z
+
+    def train(self, X, Y, layers=[2,2,2,1], learning_rate=0.5, iterations=1):
 
         # x: training set of data
         # y: the actual output of the training data
 
         for i in range(iterations):
+
             num_examples = 7
             i = np.random.randint(len(X) - num_examples)
             x = X[i:i + num_examples, :]
-
-            # ones_array = np.atleast_2d(np.ones(x.shape[0]))
-            # x = np.concatenate((x, ones_array.T), axis=1)
-
             x = du.append_ones(x)
-
             y = Y[i:i + num_examples, :]
 
-            z_ij = np.dot(x, self.w_ij)  # the np.dot product of the weights of the hidden layer and the inputs
-            a_ij = self.sigmoid(z_ij)  # applying the Sigmoid activation function
+            # Data check breakpoint
+            (a,z) = self.forward_iteration(x, layers)
 
-            a_ij = du.append_ones(a_ij)
-            # np.concatenate((a_ij, ones_array.T), axis=1)
+            # Activations and linear computation breakpoint
+            dl = []
+            da = []
+            dz = []
+            for j in range(len(layers) - 1, 0, -1):
+                if j == (len(layers) - 1):
+                    dl = [-y / a[j] + (1 - y) / (1 - a[j])] + dl
+                else:
+                    da_dl = da[0] * dl[0]
+                    if da[0].shape[1] != layers[j+1]:
+                        da_dl = np.delete(da_dl, -1, 1)
+                    dl = [np.dot(da_dl, self.w[j].T)] + dl
 
-            z_jk = np.dot(a_ij, self.w_jk)  # the same previous process will be applied to find the predicted output
-            a_jk = self.sigmoid(z_jk)
+                da = [self.sigmoid_derivative(a[j])] + da
+                dz = [a[j-1]] + dz
 
-            #            print("a_jk: {0} \n y: {1} and matrix div: {2}".format(a_jk, y, y/a_jk))
-            dl_jk = -y / a_jk + (1 - y) / (1 - a_jk)  # the derivative of the cross entropy loss wrt output
-            da_jk = self.sigmoid_derivative(
-                a_jk)  # the derivative of Sigmoid  wrt the input (before activ.) of the output layer
-            dz_jk = a_ij  # the derivative of the inputs of the hidden layer (before activation) wrt weights of the output layer
+            # deltas check breakpoint
+            gradients  = []
+            for j in range(1, len(layers)):
+                da_dl = dl[j - 1] * da[j - 1]
+                if da[j-1].shape[1] != layers[j]:
+                    da_dl = np.delete(da_dl, -1, 1)
+                gradients = gradients + [np.dot(dz[j-1].T, da_dl)]
 
-            dl_ij = np.dot(da_jk * dl_jk,
-                        self.w_jk.T)  # the derivative of cross entropy loss wrt hidden layer input (after activ.)
-            da_ij = self.sigmoid_derivative(
-                a_ij)  # the derivative of Sigmoid wrt the inputs of the hidden layer (before activ.)
-            dz_ij = x  # the derivative of the inputs of the hidden layer (before activation) wrt weights of the hidden layer
+            for j in range(len(self.w)):
+                self.w[j] -= learning_rate * gradients[j]
 
-            # calculating the gradient using the chain rule
-            gradient_ij = np.dot(dz_ij.T, dl_ij * da_ij)
-            gradient_ij = np.delete(gradient_ij, -1, 1)
-            gradient_jk = np.dot(dz_jk.T, dl_jk * da_jk)
-
-            #            print("Shapes:")
-            #            print("dz_ij: {0}\nda_ij: {1}\ndl_ij{2}".format(dz_ij.shape, da_ij.shape, dl_ij.shape))
-            #            print("dz_jk: {0}\nda_jk: {1}\ndl_jk{2}".format(dz_jk.shape, da_jk.shape, dl_jk.shape))
-
-            # calculating the new optimal weights
-            self.w_ij = self.w_ij - learning_rate * gradient_ij
-            self.w_jk = self.w_jk - learning_rate * gradient_jk
+            # self.w_ij = self.w_ij - learning_rate * gradient_ij
+            # self.w_jk = self.w_jk - learning_rate * gradient_jk
 
             # printing the loss of our neural network after each 1000 iteration
             if i % 1000 == 0 in range(iterations):
-                print("loss: ", self.crossentropyerror(a_jk, y))
+                print("loss: ", self.crossentropyerror(a[-1], y))
 
-    def predict(self, inputs):
+    def synaptic_weights(self):
+        for i in range(len(self.w)):
+            print("--Layer {0}--".format(i+1))
+            print(self.w[i])
+
+    def predict(self, inputs, layers=[2,2,2,1]):
 
         inputs = du.append_ones(inputs)
 
-        # predicting the class of the input data after weights optimization
+        (a, _) = self.forward_iteration(inputs, layers)
 
-        output_from_layer1 = self.sigmoid(np.dot(inputs, self.w_ij))  # the output of the hidden layer
-        # output_from_layer1 = du.append_ones(output_from_layer1)
-        #        output_from_layer1 = np.append(output_from_layer1, [[1]], axis = 1)
-
-        output_from_layer1 = du.append_ones(output_from_layer1)
-        output_from_layer2 = self.sigmoid(np.dot(output_from_layer1, self.w_jk))  # the output of the output layer
-
-        return output_from_layer1, output_from_layer2
-
-    # the function will print the initial starting weights before training
-    def synaptic_weights(self):
-
-        print("Layer 1 (3 neurons, each with 3 inputs except the bias neuron): ")
-
-        print("w_ij: ", self.w_ij)
-
-        print("Layer 2 (1 neuron, with 4 inputs): ")
-
-        print("w_jk: ", self.w_jk)
+        return a[-1]
 
     def evaluate(self, yhat, y):
         # x = du.append_ones(x)
@@ -139,54 +134,29 @@ class ArtificialNeuralNetwork:
                 correct_predictions += 1
             else:
                 incorrect += [(prediction[0], y[index][0])]
-        return correct_predictions / total_instances
 
         print("Incorrect predictions: ", incorrect)
-        #
-        # # for instance in x:
-        # (_, out) = self.predict(x)
-        #
-        # for i, [prediction] in enumerate(out):
-        #     if round(prediction) == 0:
-        #         predicted_label = 0
-        #     else:
-        #         predicted_label = 1
-        #
-        #     if y[i] == predicted_label:
-        #         correct_predictions += 1
-        #     else:
-        #         incorrect += [(i, prediction, y[i][0])]
-
         print("Correct predictions: ", correct_predictions)
         print("Total test instances: ", total_instances)
+        return correct_predictions / total_instances
 
 
-def ann_main(x, y, x_test, y_test, epochs = 100):
+def ann_main(x, y, x_test, y_test, learning_rate = 1, epochs = 100):
     ANN = ArtificialNeuralNetwork()
 
     ANN.synaptic_weights()
 
-    # the training inputs
-    # the last column is used to add non linearity to the classification task
-
     # the training outputs
-    learning_rate = 1
-
-
-    ANN.train(x, y, learning_rate, epochs)
+    ANN.train(x, y, learning_rate = learning_rate, iterations = epochs)
 
     # Printing the new synaptic weights after training
     print("New synaptic weights after training: ")
-    print("w_ij: ", ANN.w_ij)
-    print("w_jk: ", ANN.w_jk)
+    ANN.synaptic_weights()
 
     # Our prediction after feeding the ANN with new set of data
-    # random_test = np.array([[-5.9, -0.006, 1], [-5.9, 0.006, 1], [5.9, -0.006, 1], [5.9, 0.006, 1], [-0.0059, -6, 1], [-0.0059, 6, 1],[0.0059, -6, 1], [0.0059, 6, 1]])
-    (_, out_layer_2) = ANN.predict(x_test)
+    output = ANN.predict(x_test)
 
-    print(ANN.evaluate(out_layer_2, y_test))
-
-    # print(ANN.evaluate(x_test, y_test))
+    print(ANN.evaluate(output, y_test))
 
 
 if __name__ == "__main__":
