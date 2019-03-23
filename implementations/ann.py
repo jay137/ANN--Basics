@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Mar 13 06:29:37 2019
-
-@author: Shrey
-"""
-
 # Import our dependencies
 # For custom implementation
 import numpy as np
@@ -103,9 +96,6 @@ class ArtificialNeuralNetwork:
             for j in range(len(self.w)):
                 self.w[j] -= learning_rate * gradients[j]
 
-            # self.w_ij = self.w_ij - learning_rate * gradient_ij
-            # self.w_jk = self.w_jk - learning_rate * gradient_jk
-
             # printing the loss of our neural network after each 1000 iteration
             if i % 1000 == 0 in range(iterations):
                 print("loss: ", self.crossentropyerror(a[-1], y))
@@ -157,15 +147,3 @@ def ann_main(x, y, x_test, y_test, learning_rate = 1, epochs = 100):
     output = ANN.predict(x_test)
 
     print(ANN.evaluate(output, y_test))
-
-
-if __name__ == "__main__":
-    max_range = 10
-
-    (x, y) = du.load_data(max_range)
-    (x, y) = du.shuffle_data(x, y)
-
-    (x_test, y_test) = du.load_data(max_range, single_class_side_number=24)
-    (x_test, y_test) = du.shuffle_data(x_test, y_test)
-
-    ann_main(x, y, x_test, y_test)
